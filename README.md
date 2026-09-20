@@ -1,0 +1,125 @@
+# Focal
+
+A small real-time virtual study room app, built as a portfolio project. Inspired
+by a university FYP for a similar study-room app (Flask/Socket.IO/SQLite), rebuilt
+independently on a different stack: **FastAPI + native WebSockets, React,
+PostgreSQL**, fully Dockerized for one-command deployment to a VPS.
+
+## Features
+
+- Email/password auth (JWT)
+- Create/join study rooms via a short room code
+- Real-time collaborative whiteboard (canvas + WebSocket broadcast)
+- Real-time chat with persisted history (PostgreSQL)
+- Server-authoritative synced Pomodoro timer (everyone in a room sees the same countdown)
+- Video calls via an embedded Jitsi Meet room (no signaling server needed)
+- AI study-help chatbot ("Collab Bot") backed by Groq's free-tier Llama 3.1 API, answers post into the shared chat for everyone
+
+## Architecture
+
+```
+React (nginx, port 80)  <---- HTTP ---->  FastAPI (port 8000)  <---->  PostgreSQL
+                         <---- WS   ---->  /ws/{room_code}
+                                           (auth, rooms, chat, whiteboard
+                                            relay, timer, chatbot)
+```
+
+One WebSocket connection per client per room carries chat messages,
+whiteboard strokes, and Pomodoro timer sync as typed JSON events
+(`chat_message`, `whiteboard_draw`, `whiteboard_clear`, `timer_start`,
+`timer_pause`, `timer_reset`, `timer_state`, `presence`).
+
+## Run locally with Docker (recommended)
+
+```bash
+cp .env.example .env
+# edit .env: set a real JWT_SECRET, and GROQ_API_KEY if you want the chatbot to work
+docker compose up --build
+```
+
+- Frontend: http://localhost
+- Backend docs (Swagger): http://localhost:8000/docs
+
+## Run without Docker (local dev)
+
+Backend:
+```bash
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+export DATABASE_URL=postgresql://collabstudy:collabstudy@localhost:5432/collabstudy
+export JWT_SECRET=dev-secret
+uvicorn app.main:app --reload
+```
+
+Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+You'll need a local Postgres instance running, or just point `DATABASE_URL`
+at `sqlite:///./dev.db` for quick local testing (swap `psycopg2-binary` isn't
+needed then, but SQLAlchemy handles the URL switch transparently).
+
+## Getting a free Groq API key (for the AI chatbot)
+
+1. Sign up at https://console.groq.com
+2. Create an API key
+3. Put it in `.env` as `GROQ_API_KEY=...`
+
+Without it, the chatbot still works end-to-end but replies with a
+"not configured" message instead of a real answer -- useful for demoing the
+plumbing without a key.
+
+## Deploying to a VPS
+
+1. Point a domain (or just use the server IP) at your VPS.
+2. `git clone` this project onto the VPS, `cp .env.example .env` and fill in
+   real values -- especially `JWT_SECRET`, `POSTGRES_PASSWORD`, and
+   `CORS_ORIGINS` (must include whatever origin the frontend is actually
+   served from).
+3. Set `VITE_API_URL` in `.env` to `http://your-domain-or-ip:8000` (the
+   frontend build bakes this in, so redeploy the frontend if it changes).
+4. `docker compose up -d --build`
+5. (Recommended) put Caddy or nginx + Let's Encrypt in front of ports 80/8000
+   for HTTPS -- required for camera/mic access to work reliably in the
+   browser (Jitsi) on a real domain.
+
+## Project structure
+
+```
+backend/
+  app/
+    main.py            FastAPI app, CORS, router registration
+    config.py           env-driven settings
+    database.py          SQLAlchemy engine/session
+    models.py            User, Room, Message
+    schemas.py            Pydantic request/response models
+    auth.py                 JWT + password hashing
+    websocket_manager.py     per-room connection pool + Pomodoro ticker
+    routers/
+      auth.py           signup/login
+      rooms.py           create/join/list rooms, message history
+      ws.py                the shared /ws/{room_code} endpoint
+      chatbot.py            Groq-backed AI endpoint
+frontend/
+  src/
+    pages/               Login, Signup, Dashboard, Room
+    components/          Whiteboard, Chat, PomodoroTimer, JitsiEmbed, Chatbot
+docker-compose.yml
+.env.example
+```
+
+## Notes / things to mention in an interview
+
+- The WebSocket connection manager is in-memory, which is fine for a single
+  backend container (this deploy target). Scaling to multiple replicas would
+  need a Redis pub/sub layer so broadcasts reach every instance -- a natural
+  "what would you improve" answer.
+- The Pomodoro timer is server-authoritative (ticked by an `asyncio` task per
+  active room) rather than client-side, so everyone in a room sees the exact
+  same countdown even if they join mid-session.
+- Auth is a from-scratch JWT flow (no Supabase/Firebase) to demonstrate
+  understanding of the underlying mechanics.
