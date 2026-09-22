@@ -73,19 +73,6 @@ Without it, the chatbot still works end-to-end but replies with a
 "not configured" message instead of a real answer -- useful for demoing the
 plumbing without a key.
 
-## Deploying to a VPS
-
-1. Point a domain (or just use the server IP) at your VPS.
-2. `git clone` this project onto the VPS, `cp .env.example .env` and fill in
-   real values -- especially `JWT_SECRET`, `POSTGRES_PASSWORD`, and
-   `CORS_ORIGINS` (must include whatever origin the frontend is actually
-   served from).
-3. Set `VITE_API_URL` in `.env` to `http://your-domain-or-ip:8000` (the
-   frontend build bakes this in, so redeploy the frontend if it changes).
-4. `docker compose up -d --build`
-5. (Recommended) put Caddy or nginx + Let's Encrypt in front of ports 80/8000
-   for HTTPS -- required for camera/mic access to work reliably in the
-   browser (Jitsi) on a real domain.
 
 ## Project structure
 
@@ -111,15 +98,3 @@ frontend/
 docker-compose.yml
 .env.example
 ```
-
-## Notes / things to mention in an interview
-
-- The WebSocket connection manager is in-memory, which is fine for a single
-  backend container (this deploy target). Scaling to multiple replicas would
-  need a Redis pub/sub layer so broadcasts reach every instance -- a natural
-  "what would you improve" answer.
-- The Pomodoro timer is server-authoritative (ticked by an `asyncio` task per
-  active room) rather than client-side, so everyone in a room sees the exact
-  same countdown even if they join mid-session.
-- Auth is a from-scratch JWT flow (no Supabase/Firebase) to demonstrate
-  understanding of the underlying mechanics.
