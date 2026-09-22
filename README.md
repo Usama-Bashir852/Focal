@@ -73,28 +73,3 @@ Without it, the chatbot still works end-to-end but replies with a
 "not configured" message instead of a real answer -- useful for demoing the
 plumbing without a key.
 
-
-## Project structure
-
-```
-backend/
-  app/
-    main.py            FastAPI app, CORS, router registration
-    config.py           env-driven settings
-    database.py          SQLAlchemy engine/session
-    models.py            User, Room, Message
-    schemas.py            Pydantic request/response models
-    auth.py                 JWT + password hashing
-    websocket_manager.py     per-room connection pool + Pomodoro ticker
-    routers/
-      auth.py           signup/login
-      rooms.py           create/join/list rooms, message history
-      ws.py                the shared /ws/{room_code} endpoint
-      chatbot.py            Groq-backed AI endpoint
-frontend/
-  src/
-    pages/               Login, Signup, Dashboard, Room
-    components/          Whiteboard, Chat, PomodoroTimer, JitsiEmbed, Chatbot
-docker-compose.yml
-.env.example
-```
